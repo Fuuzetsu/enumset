@@ -577,9 +577,12 @@ fn enum_set_type_impl(info: EnumSetInfo, warnings: Vec<(Span, &'static str)>) ->
                     },
                 )
             } else {
-                (quote! {}, quote! {
-                    #core::prelude::v1::Ok(#enumset::EnumSet::<#name>::from_array(accum))
-                })
+                (
+                    quote! {},
+                    quote! {
+                        #core::prelude::v1::Ok(#enumset::EnumSet::<#name>::from_array(accum))
+                    },
+                )
             };
             quote! {
                 fn serialize<S: #serde::Serializer>(
@@ -642,6 +645,85 @@ fn enum_set_type_impl(info: EnumSetInfo, warnings: Vec<(Span, &'static str)>) ->
 
     #[cfg(not(feature = "serde"))]
     let serde_ops = quote! {};
+
+    #[cfg(feature = "borsh")]
+    let borsh = quote!(#enumset::__internal::borsh);
+
+    // None => match self.max_discrim {
+    //     x if x < 8 => SerdeRepr::U8,
+    //     x if x < 16 => SerdeRepr::U16,
+    //     x if x < 32 => SerdeRepr::U32,
+    //     x if x < 64 => SerdeRepr::U64,
+    //     x if x < 128 => SerdeRepr::U128,
+    //     _ => SerdeRepr::Array,
+    // },
+    #[cfg(feature = "borsh")]
+    let borsh_ops = if info.max_discrim >= 128 {
+        let preferred_size = quote! {
+            <<#name as #internal::EnumSetTypePrivate>::Repr as #internal::EnumSetTypeRepr>
+                ::PREFERRED_ARRAY_LEN
+        };
+        quote! {
+            fn serialize_borsh<W: #borsh::io::Write>(set: #enumset::EnumSet<#name>, writer: &mut W) -> #borsh::io::Result<()> {
+                // read the enum as an array
+                let array = set.as_array::<{ #preferred_size }>();
+
+                // find the last non-zero value in the array
+                let mut end = array.len();
+                for i in (0..array.len()).rev() {
+                    if array[i] != 0 {
+                        break;
+                    }
+                    end = i + 1;
+                }
+
+                // serialize the array
+                #borsh::BorshSerialize::serialize(&array[..end], writer)
+            }
+            fn deserialize_borsh<R: #borsh::io::Read>(reader: &mut R) -> #borsh::io::Result<#enumset::EnumSet<#name>> {
+                let mut accum = [0; #preferred_size];
+
+                let mut i = 0;
+                for _ in 0..accum.len() {
+                    accum[i] = <u64 as #borsh::BorshDeserialize>::deserialize_reader(reader)?;
+                }
+
+                #core::prelude::v1::Ok(#enumset::EnumSet::<#name>::from_array(accum))
+            }
+        }
+    } else {
+        let (serialize_repr, from_fn, to_fn) = if info.max_discrim < 8 {
+            (quote! { u8 }, quote! { from_u8 }, quote! { to_u8 })
+        } else if info.max_discrim < 16 {
+            (quote! { u16 }, quote! { from_u16 }, quote! { to_u16 })
+        } else if info.max_discrim < 32 {
+            (quote! { u32 }, quote! { from_u32 }, quote! { to_u32 })
+        } else if info.max_discrim < 64 {
+            (quote! { u64 }, quote! { from_u64 }, quote! { to_u64 })
+        } else {
+            // < 128 due to guard earlier with Array case
+            (quote! { u128 }, quote! { from_u128 }, quote! { to_u128 })
+        };
+
+        quote! {
+            fn borsh_serialize<W: #borsh::io::Write>(set: #enumset::EnumSet<#name>, writer: &mut W) -> #borsh::io::Result<()> {
+                let value =
+                    <#repr as #enumset::__internal::EnumSetTypeRepr>::#to_fn(&set.__priv_repr);
+                #borsh::BorshSerialize::serialize(&value, writer)
+            }
+
+            fn borsh_deserialize<R: #borsh::io::Read>(reader: &mut R) -> #borsh::io::Result<#enumset::EnumSet<#name>> {
+                let value = <#serialize_repr as #borsh::BorshDeserialize>::deserialize_reader(reader)?;
+                let value = <#repr as #enumset::__internal::EnumSetTypeRepr>::#from_fn(value);
+                #core::prelude::v1::Ok(#enumset::EnumSet {
+                    __priv_repr: value & #all_variants,
+                })
+            }
+        }
+    };
+
+    #[cfg(not(feature = "borsh"))]
+    let borsh_ops = quote! {};
 
     let is_uninhabited = info.variants.is_empty();
     let is_zst = info.variants.len() == 1;
@@ -849,6 +931,7 @@ fn enum_set_type_impl(info: EnumSetInfo, warnings: Vec<(Span, &'static str)>) ->
             const VARIANT_COUNT: u32 = #variant_count;
             #into_impl
             #serde_ops
+            #borsh_ops
         }
 
         #[automatically_derived]

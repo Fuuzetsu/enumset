@@ -19,6 +19,7 @@ travis-ci = { repository = "Lymia/enumset", branch = "master" }
 maintenance = { status = "actively-developed" }
 
 [features]
+borsh = ["dep:borsh", "enumset_derive/borsh"]
 serde = ["serde2", "enumset_derive/serde"]
 alloc = []
 std = ["alloc", "enumset_derive/proc-macro-crate"]
@@ -28,6 +29,7 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
+borsh = { version = "1.2.0", default-features = false, optional = true }
 enumset_derive = { version = "0.8.0", path = "../enumset_derive" }
 serde2 = { package = "serde", version = "1", default-features = false, optional = true }
 

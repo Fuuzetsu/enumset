@@ -120,6 +120,12 @@ use {
     doc = "[`Serialize`]: https://docs.rs/serde/latest/serde/trait.Serialize.html\n",
     doc = "[`Deserialize`]: https://docs.rs/serde/latest/serde/trait.Deserialize.html\n"
 )]
+#[cfg_attr(
+    not(feature = "borsh"),
+    doc = "\n\n",
+    doc = "[`BorshSerialize`]: https://docs.rs/borsh/latest/borsh/ser/trait.BorshSerialize.html\n",
+    doc = "[`BorshDeserialize`]: https://docs.rs/borsh/latest/borsh/de/trait.BorshDeserialize.html\n"
+)]
 #[derive(Copy, Clone, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct EnumSet<T: EnumSetType> {
@@ -428,6 +434,21 @@ impl<'de, T: EnumSetType> Deserialize<'de> for EnumSet<T> {
         T::deserialize(deserializer)
     }
 }
+
+#[cfg(feature = "borsh")]
+impl<T: EnumSetType> borsh::BorshSerialize for EnumSet<T> {
+    fn serialize<W: borsh::io::Write>(&self, writer: &mut W) -> borsh::io::Result<()> {
+        T::borsh_serialize(*self, writer)
+    }
+}
+
+#[cfg(feature = "borsh")]
+impl<T: EnumSetType> borsh::BorshDeserialize for EnumSet<T> {
+    fn deserialize_reader<R: borsh::io::Read>(reader: &mut R) -> borsh::io::Result<Self> {
+        T::borsh_deserialize(reader)
+    }
+}
+
 //endregion
 
 //region EnumSet conversions

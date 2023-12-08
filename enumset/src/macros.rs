@@ -8,6 +8,10 @@ pub mod __internal {
     #[cfg(feature = "serde")]
     pub use serde2 as serde;
 
+    /// A reexport of borsh so our users don't have to also have a borsh dependency.
+    #[cfg(feature = "borsh")]
+    pub use borsh;
+
     /// Reexports of internal types
     pub use crate::{
         repr::{ArrayRepr, EnumSetTypeRepr},

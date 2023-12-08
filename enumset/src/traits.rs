@@ -54,9 +54,28 @@ pub unsafe trait EnumSetTypePrivate {
     /// can control how `EnumSet` is serialized.
     #[cfg(feature = "serde")]
     fn serialize<S: serde::Serializer>(set: EnumSet<Self>, ser: S) -> Result<S::Ok, S::Error>
-    where Self: EnumSetType;
+    where
+        Self: EnumSetType;
     /// Deserializes the `EnumSet`.
     #[cfg(feature = "serde")]
     fn deserialize<'de, D: serde::Deserializer<'de>>(de: D) -> Result<EnumSet<Self>, D::Error>
-    where Self: EnumSetType;
+    where
+        Self: EnumSetType;
+
+    /// Serializes the `EnumSet` via borsh.
+    #[cfg(feature = "borsh")]
+    fn borsh_serialize<W: borsh::io::Write>(
+        set: crate::EnumSet<Self>,
+        writer: &mut W,
+    ) -> borsh::io::Result<()>
+    where
+        Self: EnumSetType;
+
+    /// Deserializes the `EnumSet` via borsh.
+    #[cfg(feature = "borsh")]
+    fn borsh_deserialize<R: borsh::io::Read>(
+        reader: &mut R,
+    ) -> borsh::io::Result<crate::EnumSet<Self>>
+    where
+        Self: EnumSetType;
 }
